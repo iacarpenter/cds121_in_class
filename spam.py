@@ -4,6 +4,12 @@ from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.pipeline import Pipeline
+from sklearn.model_selection import cross_val_score
+from sklearn.svm import LinearSVC
+from sklearn.linear_model import SGDClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import accuracy_score
 
 DATASETS_PATH = "./datasets"
 
@@ -33,10 +39,10 @@ train_set, train_labels, test_set, test_labels = split_dataset(data)
 
 vectorizer = CountVectorizer()
 
-X = vectorizer.fit_transform(train_set["Message"])
+train_set_prepared = vectorizer.fit_transform(train_set["Message"])
 
 print("CountVectorizer:")
-print(X[:10].toarray())
+print(train_set_prepared[:10].toarray())
 # Each unique word is 'tokenized' (given a unique integer as its identifyer). 
 # Each individual document (each text) recieves a row, and each tokenized word
 # recieves a column, so that there are as many columns as there are words with 
@@ -47,7 +53,7 @@ print(X[:10].toarray())
 
 transformer = TfidfTransformer()
 
-tfidf = transformer.fit_transform(X)
+tfidf = transformer.fit_transform(train_set_prepared)
 
 print("TfidfTransformer:")
 print(tfidf[0:10].toarray())
@@ -63,7 +69,66 @@ text_pipeline = Pipeline([
     ('transformer', TfidfTransformer()),
 ])
 
-test_set_prepared = text_pipeline.fit_transform(test_set["Message"])
+text_pipeline.fit(train_set)
 
-print("Prepared test set:")
-print(test_set_prepared[:10].toarray())
+lin_svc = LinearSVC()
+
+lin_svc_scores = cross_val_score(
+    estimator=lin_svc,
+    X=train_set_prepared,
+    y=train_labels,
+    cv=3,
+    scoring='accuracy')
+print("LinearSVC scores:\n", lin_svc_scores)
+
+sgd_clf = SGDClassifier()
+
+sgd_clf_scores = cross_val_score(
+    estimator=sgd_clf,
+    X=train_set_prepared,
+    y=train_labels,
+    cv=3,
+    scoring='accuracy')
+print("SGDClassifier scores:\n", sgd_clf_scores)
+
+tree_clf = DecisionTreeClassifier()
+
+tree_clf_scores = cross_val_score(
+    estimator=tree_clf,
+    X=train_set_prepared,
+    y=train_labels,
+    cv=3,
+    scoring='accuracy')
+print("DecisionTreeClassifier scores:\n", sgd_clf_scores)
+
+# I chose to go forward with LinearSVC because its accuracy score
+# appears to be consistently higher than for the other two, though
+# by a very small margin. The better accuracy score means that the 
+# classifier's predictions matched the real labels more often.
+
+lin_svc_param_grid = [
+    {'loss': ['squared_hinge', 'hinge'], 'C': [1, 10, 100],
+    'max_iter': [10_000]}
+]
+# added max_iter of 10_1000 because it failed to converge at the default of 1000
+
+grid_search = GridSearchCV(lin_svc, lin_svc_param_grid, cv=3,
+                            scoring='accuracy', return_train_score=True)
+
+grid_search.fit(train_set_prepared, train_labels)
+print(grid_search.best_params_)
+# {'C': 1, 'loss': 'squared_hinge', 'max_iter': 10000}
+
+final_lin_svc = LinearSVC(C=1, loss='squared_hinge', max_iter=10000)
+
+final_lin_svc.fit(train_set_prepared, train_labels)
+
+test_set_prepared = text_pipeline.transform(test_set["Message"])
+
+final_predictions = final_lin_svc.predict(test_set_prepared)
+
+final_accuracy = accuracy_score(test_labels, final_predictions)
+print("Final accuracy score:", final_accuracy)
+
+
+# ValueError: X has 1 features, but LinearSVC is expecting 7736 features as input.
