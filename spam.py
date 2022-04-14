@@ -10,6 +10,7 @@ from sklearn.linear_model import SGDClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import accuracy_score
+import joblib
 
 DATASETS_PATH = "./datasets"
 
@@ -69,7 +70,7 @@ text_pipeline = Pipeline([
     ('transformer', TfidfTransformer()),
 ])
 
-text_pipeline.fit(train_set)
+text_pipeline.fit(train_set["Message"])
 
 lin_svc = LinearSVC()
 
@@ -110,7 +111,7 @@ lin_svc_param_grid = [
     {'loss': ['squared_hinge', 'hinge'], 'C': [1, 10, 100],
     'max_iter': [10_000]}
 ]
-# added max_iter of 10_1000 because it failed to converge at the default of 1000
+# added max_iter of 10_000 because it failed to converge at the default of 1000
 
 grid_search = GridSearchCV(lin_svc, lin_svc_param_grid, cv=3,
                             scoring='accuracy', return_train_score=True)
@@ -129,6 +130,14 @@ final_predictions = final_lin_svc.predict(test_set_prepared)
 
 final_accuracy = accuracy_score(test_labels, final_predictions)
 print("Final accuracy score:", final_accuracy)
+# Final accuracy score of around 0.867
 
+# Because the accuracy score is significantly higher on the training set
+# than on the test set (~0.98 vs. ~0.87) it appears that the model is 
+# overfitting. I would guess that above 85% accuracy is acceptable in some
+# but not all cases, so depending on the situation the model may have a
+# satisfactory amount of accuracy for new data, but I would want a spam 
+# filter with a higher level of accuracy than this and definitely think 
+# that it can be improved.
 
-# ValueError: X has 1 features, but LinearSVC is expecting 7736 features as input.
+joblib.dump(final_lin_svc, "final_spam_model.pkl")
